@@ -15,8 +15,7 @@ spec:
     spec:
       containers:
         - name: flask
-          # On passe à l'image 2.0 contenant la route /status
-          image: pra/flask-sqlite:2.0
+          image: pra/flask-sqlite:1.0
           imagePullPolicy: IfNotPresent
           env:
             - name: DB_PATH
@@ -30,14 +29,7 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
-            # ---> AJOUT : Associe le dossier interne /backup au PVC
-            - name: backup
-              mountPath: /backup
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: pra-data
-        # ---> AJOUT : Déclare l'utilisation du PVC des sauvegardes
-        - name: backup
-          persistentVolumeClaim:
-            claimName: pra-backup
