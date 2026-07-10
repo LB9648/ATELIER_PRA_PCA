@@ -231,27 +231,57 @@ Faites preuve de pédagogie et soyez clair dans vos explications et procedures d
 **Exercice 1 :**  
 Quels sont les composants dont la perte entraîne une perte de données ?  
   
-*..Répondez à cet exercice ici..*
+Dans l'architecture actuelle de l'atelier, la perte simultanée ou définitive des composants suivants entraîne une perte de données irrémédiable :
+
+Le PVC pra-backup : Si ce volume est supprimé ou corrompu, toutes les sauvegardes historiques et planifiées disparaissent.
+
+Le PVC pra-data ET le PVC pra-backup en même temps : Si le sinistre touche l'ensemble du cluster ou du nœud de stockage physique hébergeant les deux volumes, les données de production et leurs sauvegardes sont perdues.
+
+Le nœud physique/virtuel unique (K3d) : Les volumes étant locaux au cluster K3d (généralement adossés au stockage local de la machine hôte), la perte du conteneur K3d ou du Codespace Github efface l'intégralité des données si aucune réplication externe n'est configurée.
 
 **Exercice 2 :**  
 Expliquez nous pourquoi nous n'avons pas perdu les données lors de la supression du PVC pra-data  
   
-*..Répondez à cet exercice ici..*
+La non-perte de données lors de la suppression du volume de production s'explique par la mise en œuvre d'une stratégie de Plan de Reprise d'Activité (PRA) basée sur le découpage et la redondance :
+
+Indépendance du cycle de vie des volumes : Le volume pra-backup possède son propre cycle de vie, totalement distinct de celui de pra-data.
+
+Sauvegarde asynchrone régulière : Un CronJob Kubernetes s'exécute chaque minute pour copier le fichier de la base de données SQLite depuis /data (point de montage de pra-data) vers /backup (point de montage de pra-backup).
+
+Processus de Restauration : Lors de la phase 2, le fichier pra/50-job-restore.yaml a instancié un Job dont le seul rôle était de récupérer la dernière version valide de la base de données présente sur pra-backup et de la réinjecter dans le nouveau volume pra-data fraîchement recréé.
 
 **Exercice 3 :**  
 Quels sont les RTO et RPO de cette solution ?  
   
-*..Répondez à cet exercice ici..*
+RPO (Recovery Point Objective - Perte de données maximale admissible) :
+
+Valeur : 1 minute.
+
+Explication : Le CronJob de sauvegarde s'exécutant toutes les minutes, la quantité maximale de données que l'on peut perdre entre le dernier backup et le moment précis du sinistre est d'une minute de modifications.
+
+RTO (Recovery Time Objective - Temps de coupure maximal admissible) :
+
+Valeur : Quelques minutes (~2 à 5 minutes selon l'opérateur).
+
+Explication : Il s'agit du temps nécessaire pour qu'un humain ou un script détecte le sinistre, applique le correctif (kubectl apply -f k8s/), lance le Job de restauration (kubectl apply -f pra/50-job-restore.yaml), et reconfigure le routage/forwarding du trafic.
 
 **Exercice 4 :**  
 Pourquoi cette solution (cet atelier) ne peux pas être utilisé dans un vrai environnement de production ? Que manque-t-il ?   
   
-*..Répondez à cet exercice ici..*
+Cet atelier est une excellente preuve de concept (PoC), mais il est inutilisable en production réelle pour les raisons suivantes :
+
+Point de défaillance unique (SPOF) géographique : Les volumes pra-data et pra-backup partagent le même cluster K3d et potentiellement le même disque physique sous-jacent. Si le centre de données (Data Center) ou le serveur physique brûle, tout disparaît.
+
+Technologie SQLite inadaptée au Cloud Native : SQLite écrit dans un fichier local unique. Il ne supporte pas nativement les accès concurrents massifs et empêche de monter l'application Flask à plusieurs réplications (replicas > 1) sous peine de corrompre la base de données (erreur de verrouillage de fichier).
+
+Processus de restauration manuel : L'intervention humaine est obligatoire pour déclencher le Job de restauration, ce qui augmente le RTO et le risque d'erreur.
   
 **Exercice 5 :**  
 Proposez une archtecture plus robuste.   
   
-*..Répondez à cet exercice ici..*
+Pour transformer ce PoC en une infrastructure de production hautement disponible et résiliente, voici l'architecture recommandée :
+
+
 
 ---------------------------------------------------
 Séquence 6 : Ateliers  
