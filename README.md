@@ -281,7 +281,7 @@ Proposez une archtecture plus robuste.
   
 Pour transformer ce PoC (Proof of Concept) en une infrastructure de production hautement disponible, résiliente et conforme aux standards de l'industrie, nous devons abandonner l'approche "tout-en-un" locale au profit d'une architecture distribuée.
 
-1. Schéma conceptuel en texte
+Schéma conceptuel en texte
 Le flux de données et de disponibilité s'organise désormais de la manière suivante :
 
 [ Couche Accès ] : Un routeur/équilibreur de charge (Load Balancer externe ou Ingress Controller) reçoit le trafic des utilisateurs et le distribue intelligemment vers plusieurs zones.
@@ -294,7 +294,7 @@ La base principale (Master) en Zone A réplique de manière synchrone ses donné
 
 [ Couche Sauvegarde (Externalisée) ] : Les snapshots et les dumps de la base de données sont exportés automatiquement de manière asynchrone vers un service de stockage objet distant et immuable (ex: AWS S3 ou Google Cloud Storage) situé dans une autre région géographique.
 
-2. Les 3 piliers de cette amélioration :
+ Les 3 piliers de cette amélioration :
 Disparition du SPOF (Point de défaillance unique) : Si la Zone A subit une panne matérielle majeure ou un incendie, le Load Balancer bascule instantanément tout le trafic vers la Zone B. La base de données en Standby devient la base principale en quelques secondes (RTO quasi nul pour la partie PCA).
 
 Transition vers une application Stateless : En déportant la base de données hors des pods et hors du stockage local du cluster, l'application Flask peut être multipliée à l'infini pour absorber la charge, sans aucun risque de verrouillage ou de corruption de fichier.
