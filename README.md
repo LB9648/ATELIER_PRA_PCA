@@ -279,36 +279,27 @@ Processus de restauration manuel : L'intervention humaine est obligatoire pour d
 **Exercice 5 :**  
 Proposez une archtecture plus robuste.   
   
-Pour transformer ce PoC en une infrastructure de production hautement disponible et résiliente, voici l'architecture recommandée :
+Pour transformer ce PoC (Proof of Concept) en une infrastructure de production hautement disponible, résiliente et conforme aux standards de l'industrie, nous devons abandonner l'approche "tout-en-un" locale au profit d'une architecture distribuée.
 
-[ Trafic Utilisateur ] -> [ Ingress Controller / Load Balancer ]
-                                |
-             +------------------+------------------+
-             | (Routage Haute Disponibilité)       |
-             v                                     v
-    [ Zone AWS / AZ A ]                   [ Zone AWS / AZ B ]
-   +-------------------+                 +-------------------+
-   | Pod Flask (Repl 1)|                 | Pod Flask (Repl 2)|
-   +-------------------+                 +-------------------+
-             |                                     |
-             +------------------+------------------+
-                                |
-                                v
-               [ Base de données managée Multi-AZ ]
-               (Ex: AWS RDS PostgreSQL ou Aurora)
-                     |                       |
-                     | (Réplication Synchrone)| (Sauvegardes Automatiques)
-                     v                       v
-           [ Instance Read-Replica ]    [ Stockage Object distant (S3) ]
-             (Région B / DR)              (Chiffré & Immuable)
+1. Schéma conceptuel en texte
+Le flux de données et de disponibilité s'organise désormais de la manière suivante :
 
-Améliorations clés :
+[ Couche Accès ] : Un routeur/équilibreur de charge (Load Balancer externe ou Ingress Controller) reçoit le trafic des utilisateurs et le distribue intelligemment vers plusieurs zones.
 
-Migration de la base de données : Remplacement de SQLite par un SGBD Cloud Native managé (ex: AWS RDS PostgreSQL) configuré en Multi-AZ (Multi-Zone de disponibilité) avec réplication synchrone.
+[ Couche Applicative (Multi-AZ) ] : L'application Flask est déployée sur plusieurs nœuds Kubernetes répartis sur au moins deux zones de disponibilité distinctes (par exemple, Zone A et Zone B). L'application passe à un état stateless (sans état local) avec un paramètre replicas: 3 ou plus.
 
-Externalisation des sauvegardes : Exportation des snapshots de sauvegarde vers un stockage objet distant, isolé et immuable (ex: AWS S3 dans une autre région géographique).
+[ Couche Données (Managée) ] : Le fichier SQLite local est supprimé et remplacé par une base de données relationnelle managée (ex: AWS RDS PostgreSQL ou Google Cloud SQL).
 
-Mise à l'échelle (Scalabilité) : L'application Flask peut désormais être déployée avec replicas: 3 ou plus, répartis sur plusieurs nœuds grâce à la disparition du fichier SQLite local.
+La base principale (Master) en Zone A réplique de manière synchrone ses données vers une base miroir (Standby) en Zone B (mécanisme de Haute Disponibilité / PCA).
+
+[ Couche Sauvegarde (Externalisée) ] : Les snapshots et les dumps de la base de données sont exportés automatiquement de manière asynchrone vers un service de stockage objet distant et immuable (ex: AWS S3 ou Google Cloud Storage) situé dans une autre région géographique.
+
+2. Les 3 piliers de cette amélioration :
+Disparition du SPOF (Point de défaillance unique) : Si la Zone A subit une panne matérielle majeure ou un incendie, le Load Balancer bascule instantanément tout le trafic vers la Zone B. La base de données en Standby devient la base principale en quelques secondes (RTO quasi nul pour la partie PCA).
+
+Transition vers une application Stateless : En déportant la base de données hors des pods et hors du stockage local du cluster, l'application Flask peut être multipliée à l'infini pour absorber la charge, sans aucun risque de verrouillage ou de corruption de fichier.
+
+Sécurisation géographique des sauvegardes (PRA réel) : Les sauvegardes n'étant plus stockées sur les mêmes disques que la production, une destruction complète du cluster Kubernetes n'impactera pas l'historique des données. Celles-ci restent disponibles sur le stockage objet distant pour reconstruire l'infrastructure ailleurs (Région de secours).
 ---------------------------------------------------
 Séquence 6 : Ateliers  
 Difficulté : Moyenne (~2 heures)
