@@ -318,6 +318,60 @@ Aujourd’hui nous restaurobs “le dernier backup”. Nous souhaitons **ajouter
 
 *..Décrir ici votre procédure de restauration (votre runbook)..*  
   
+En cas de sinistre ou de corruption de données nécessitant un retour en arrière (Rollback) à un instant précis, la procédure de restauration ne doit pas cibler aveuglément le dernier backup en date, mais un point de restauration spécifique choisi par l'administrateur. 
+
+Voici le Runbook opérationnel appliqué pour restaurer la base de données à son état du **10 juillet à 11:03** (fichier cible : `app-1783681382.db`).
+
+---
+
+#### 📋 Runbook de Restauration d'un Point Spécifique
+
+**Étape 1 : Identification et vérification de la sauvegarde cible**
+Avant toute manipulation, assurez-vous que le fichier de sauvegarde souhaité est bien présent dans le volume `pra-backup` :
+```bash
+kubectl -n pra exec -it deployment/flask -- ls -lh /backup
+# Résultat attendu : présence du fichier -rw-r--r-- ... app-1783681382.db
+```
+
+**Étape 2 : Modification du manifeste de restauration**
+Ouvrez le fichier de configuration du Job de restauration (ex: k8s/50-job-restore.yaml) et modifiez la section args pour remplacer la sélection automatique (head -1) par le nom de fichier fixe :
+```bash
+args:
+            - |
+              echo "Début de la restauration du point spécifique..."
+              cp /backup/app-1783681382.db /data/app.db
+              echo "Restauration du fichier app-1783681382.db terminée avec succès !"
+```
+**Étape 3 : Nettoyage et exécution du Job**
+Kubernetes n'autorise pas l'application d'un Job si un ancien historique du même nom existe. Il faut purger l'ancien avant de lancer la restauration :
+```bash
+# 1. Supprimer l'ancien Job du cluster
+kubectl -n pra delete job sqlite-restore --ignore-not-found
+
+# 2. Appliquer le manifeste modifié pour déclencher la copie
+kubectl apply -f k8s/50-job-restore.yaml
+```
+**Étape 4 : Validation de la copie et purge des caches applicatifs**
+Vérifiez dans les logs du Job que le script s'est exécuté sans erreur :
+```bash
+kubectl -n pra logs job/sqlite-restore
+```
+
+Supprimez le Pod applicatif Flask actuel afin de forcer Kubernetes à en recréer un nouveau, coupant ainsi les connexions SQLite persistantes et forçant le rechargement de la base restaurée de 11:03 :
+
+```bash
+kubectl -n pra delete pod -l app=flask
+```
+
+**Étape 5 : Réalignement des accès réseaux (Port-Forward)**
+La suppression du Pod Flask rompt la redirection de port en cours. Relancez-la pour valider le résultat :
+```bash
+# Tuer l'ancienne redirection devenue obsolète
+pkill -f "port-forward"
+
+# Relancer le port-forward vers le nouveau Pod
+kubectl -n pra port-forward svc/flask 8080:80 >/tmp/web.log 2>&1 &
+```
 ---------------------------------------------------
 Evaluation
 ---------------------------------------------------
