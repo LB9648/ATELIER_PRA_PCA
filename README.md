@@ -281,8 +281,34 @@ Proposez une archtecture plus robuste.
   
 Pour transformer ce PoC en une infrastructure de production hautement disponible et résiliente, voici l'architecture recommandée :
 
+[ Trafic Utilisateur ] -> [ Ingress Controller / Load Balancer ]
+                                |
+             +------------------+------------------+
+             | (Routage Haute Disponibilité)       |
+             v                                     v
+    [ Zone AWS / AZ A ]                   [ Zone AWS / AZ B ]
+   +-------------------+                 +-------------------+
+   | Pod Flask (Repl 1)|                 | Pod Flask (Repl 2)|
+   +-------------------+                 +-------------------+
+             |                                     |
+             +------------------+------------------+
+                                |
+                                v
+               [ Base de données managée Multi-AZ ]
+               (Ex: AWS RDS PostgreSQL ou Aurora)
+                     |                       |
+                     | (Réplication Synchrone)| (Sauvegardes Automatiques)
+                     v                       v
+           [ Instance Read-Replica ]    [ Stockage Object distant (S3) ]
+             (Région B / DR)              (Chiffré & Immuable)
 
+Améliorations clés :
 
+Migration de la base de données : Remplacement de SQLite par un SGBD Cloud Native managé (ex: AWS RDS PostgreSQL) configuré en Multi-AZ (Multi-Zone de disponibilité) avec réplication synchrone.
+
+Externalisation des sauvegardes : Exportation des snapshots de sauvegarde vers un stockage objet distant, isolé et immuable (ex: AWS S3 dans une autre région géographique).
+
+Mise à l'échelle (Scalabilité) : L'application Flask peut désormais être déployée avec replicas: 3 ou plus, répartis sur plusieurs nœuds grâce à la disparition du fichier SQLite local.
 ---------------------------------------------------
 Séquence 6 : Ateliers  
 Difficulté : Moyenne (~2 heures)
