@@ -1,12 +1,9 @@
 import os
-import glob
-import time
 import sqlite3
 from datetime import datetime
 from flask import Flask, jsonify, request
 
 DB_PATH = os.getenv("DB_PATH", "/data/app.db")
-BACKUP_DIR = os.getenv("BACKUP_DIR", "/backup")  # Chemin vers le PVC pra-backup
 
 app = Flask(__name__)
 
@@ -90,41 +87,6 @@ def count():
     conn.close()
 
     return jsonify(count=n)
-
-# ---------- Nouvelle Route - Atelier 1 ----------
-@app.get("/status")
-def status():
-    init_db()
-
-    # 1. Récupération du nombre d'événements en base
-    conn = get_conn()
-    cur = conn.execute("SELECT COUNT(*) FROM events")
-    n = cur.fetchone()[0]
-    conn.close()
-
-    # 2. Analyse du dossier des sauvegardes
-    # On cherche tous les fichiers présents dans le dossier de backup
-    list_of_files = glob.glob(os.path.join(BACKUP_DIR, "*"))
-    
-    if not list_of_files:
-        return jsonify(
-            count=n,
-            last_backup_file=None,
-            backup_age_seconds=None
-        )
-
-    # Récupération du fichier le plus récent basé sur la date de modification
-    latest_file = max(list_of_files, key=os.path.getmtime)
-    last_backup_file = os.path.basename(latest_file)
-    
-    # Calcul de l'âge du backup en secondes
-    backup_age_seconds = int(time.time() - os.path.getmtime(latest_file))
-
-    return jsonify(
-        count=n,
-        last_backup_file=last_backup_file,
-        backup_age_seconds=backup_age_seconds
-    )
 
 # ---------- Main ----------
 if __name__ == "__main__":
